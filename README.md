@@ -63,3 +63,4 @@ rotation, plugins, DMs, edits, reactions and offline delivery.
 
 * [Architecture](docs/ARCHITECTURE.md)
 * [Encryption, and whether we can use Signal's](docs/ENCRYPTION.md)
+* [Lab: hands-on exercises](lab.md)
