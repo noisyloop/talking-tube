@@ -1,6 +1,7 @@
 # Architecture
 
-Discord-style communities, end-to-end encrypted, no logins or phone numbers.
+Discord-style communities, end-to-end encrypted. No email, no phone number,
+no username or password.
 A user is an Ed25519 device key. Anyone can run a relay.
 
 ```
@@ -25,11 +26,17 @@ A user is an Ed25519 device key. Anyone can run a relay.
 
 ## Identity without logins
 
+Rule: neither the client nor the relay ever asks for an email address or phone
+number, not even optionally or for recovery. A relay that wants spam control
+uses invites, rate limits or proof-of-work instead.
+
 1. `tt init` makes a device key.
 2. On connect the relay sends a random nonce; the client signs it.
 3. Joining a community is by invite (community ID + relay URL + inviter key),
    shared as a link or QR code.
 4. Verify people by comparing safety numbers / QR codes, as in Shadow.
+5. Account recovery means backing up your device key (e.g. an encrypted export
+   or a passphrase), never an email reset. Lose the key and the identity is gone.
 
 ## Plugins
 

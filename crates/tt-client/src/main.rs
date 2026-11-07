@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "tt", about = "Talking Tube: encrypted communities, no accounts")]
+#[command(name = "tt", about = "Talking Tube: encrypted communities, no accounts, no email, no phone")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
