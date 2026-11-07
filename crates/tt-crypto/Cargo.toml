@@ -1,15 +1,9 @@
 [package]
 name = "tt-crypto"
-description = "Signal-protocol encryption (X3DH + Double Ratchet) for DMs, pluggable group encryption for channels."
+description = "Signal-protocol encryption (X3DH + Double Ratchet) for DMs and sender keys for channels."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-
-[features]
-default = ["sender-keys"]
-sender-keys = []
-# MLS (RFC 9420) via openmls. Off until the relay provides a single commit order.
-mls = []
 
 [dependencies]
 tt-core.workspace = true
@@ -22,4 +16,6 @@ hkdf.workspace = true
 hmac.workspace = true
 sha2.workspace = true
 rand_core.workspace = true
-zeroize.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

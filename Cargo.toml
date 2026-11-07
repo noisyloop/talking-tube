@@ -8,6 +8,7 @@ members = [
     "crates/tt-relay",
     "crates/tt-client",
     "plugins/echo",
+    "plugins/dice",
 ]
 
 [workspace.package]
@@ -22,23 +23,27 @@ tt-core   = { path = "crates/tt-core" }
 tt-crypto = { path = "crates/tt-crypto" }
 tt-proto  = { path = "crates/tt-proto" }
 tt-plugin = { path = "crates/tt-plugin" }
+tt-relay  = { path = "crates/tt-relay" }
 
 # common
 anyhow     = "1"
 thiserror  = "2"
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
+hex        = "0.4"
+base64     = "0.22"
 tokio      = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
 tracing    = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-clap       = { version = "4", features = ["derive"] }
+clap       = { version = "4", features = ["derive", "env"] }
 
 # crypto (same primitives as Shadow)
-x25519-dalek  = { version = "2", features = ["static_secrets", "zeroize"] }
+x25519-dalek  = { version = "2", features = ["static_secrets"] }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 aes-gcm       = "0.10"
 hkdf          = "0.12"
 hmac          = "0.12"
 sha2          = "0.10"
 rand_core     = { version = "0.6", features = ["getrandom"] }
-zeroize       = { version = "1", features = ["derive"] }

@@ -1,6 +1,6 @@
 [package]
 name = "tt-client"
-description = "Talking Tube client (CLI now, TUI/GUI later)."
+description = "Talking Tube client: engine library and the `tt` terminal app."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,8 +15,15 @@ tt-crypto.workspace = true
 tt-proto.workspace = true
 tt-plugin.workspace = true
 tt-plugin-echo = { path = "../../plugins/echo" }
+tt-plugin-dice = { path = "../../plugins/dice" }
 anyhow.workspace = true
 clap.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+
+[dev-dependencies]
+tt-relay.workspace = true

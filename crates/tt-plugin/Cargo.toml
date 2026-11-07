@@ -1,6 +1,6 @@
 [package]
 name = "tt-plugin"
-description = "Client-side plugin API."
+description = "Client-side plugin API: slash commands and message hooks."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

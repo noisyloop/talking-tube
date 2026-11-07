@@ -1,49 +1,76 @@
 //! Plugin API.
 //!
-//! Plugins (bots, slash commands, formatters) run **on the client**, after
-//! decryption, so the relay never needs plaintext. A bot is just another
-//! device key that runs the client headless with plugins loaded.
+//! Plugins (bots, slash commands, auto-replies) run **on the client**, after
+//! decryption, so the relay never needs plaintext and encryption never has to
+//! be weakened for bots. A bot is just a device key running `tt run --bot`
+//! with plugins loaded.
 //!
-//! Today plugins are Rust crates compiled in. A WASM host (e.g. wasmtime)
-//! can implement the same trait later for sandboxed third-party plugins.
+//! * When *you* type `/roll 2d6`, the matching plugin runs on your device and
+//!   its reply is posted as your message.
+//! * In `--bot` mode, plugins also answer other people's commands and see
+//!   every message ([`Plugin::on_message`]).
+//!
+//! Plugins are compiled-in Rust crates for now. A WASM host could implement
+//! the same trait later, so untrusted plugins run sandboxed.
 
 use tt_core::{ChannelId, CommunityId, DeviceKey};
 
 #[derive(Debug, thiserror::Error)]
 pub enum PluginError {
     #[error("{0}")]
+    Usage(String),
+    #[error("{0}")]
     Other(String),
 }
 
-/// What a plugin sees for each decrypted message.
-pub struct MessageEvent<'a> {
-    pub community: Option<CommunityId>,
-    pub channel: Option<ChannelId>,
-    pub author: DeviceKey,
-    pub text: &'a str,
+/// Where a message was posted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Place {
+    Dm(DeviceKey),
+    Channel(CommunityId, ChannelId),
 }
 
-/// What a plugin may ask the client to do. The client decides whether to allow it.
-#[derive(Debug)]
+/// A decrypted message, as a plugin sees it.
+pub struct MessageEvent<'a> {
+    pub place: Place,
+    pub author: DeviceKey,
+    pub author_name: &'a str,
+    pub text: &'a str,
+    /// Is the author the device running this plugin?
+    pub from_me: bool,
+}
+
+/// What a plugin asks the client to do.
+#[derive(Debug, PartialEq, Eq)]
 pub enum Action {
+    /// Post this text where the message came from.
     Reply(String),
+    /// Show this only to the local user.
+    Notify(String),
     Ignore,
 }
 
-pub trait Plugin: Send + Sync {
+pub trait Plugin: Send {
     fn name(&self) -> &'static str;
 
-    /// Slash commands this plugin handles, without the leading `/`.
+    /// One-line description for `/plugins`.
+    fn description(&self) -> &'static str {
+        ""
+    }
+
+    /// Slash commands handled by this plugin, without the leading `/`.
     fn commands(&self) -> &[&'static str] {
         &[]
     }
 
-    fn on_message(&self, _event: &MessageEvent<'_>) -> Result<Action, PluginError> {
+    /// Runs for `/command args`.
+    fn on_command(&mut self, _command: &str, _args: &str, _event: &MessageEvent<'_>)
+        -> Result<Action, PluginError> {
         Ok(Action::Ignore)
     }
 
-    fn on_command(&self, _command: &str, _args: &str, _event: &MessageEvent<'_>)
-        -> Result<Action, PluginError> {
+    /// Runs for every message that isn't a command. Only called in bot mode.
+    fn on_message(&mut self, _event: &MessageEvent<'_>) -> Result<Action, PluginError> {
         Ok(Action::Ignore)
     }
 }
@@ -51,6 +78,13 @@ pub trait Plugin: Send + Sync {
 #[derive(Default)]
 pub struct Registry {
     plugins: Vec<Box<dyn Plugin>>,
+}
+
+/// Splits `/cmd args` into `("cmd", "args")`.
+pub fn parse_command(text: &str) -> Option<(&str, &str)> {
+    let rest = text.strip_prefix('/')?;
+    let (cmd, args) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
+    (!cmd.is_empty()).then_some((cmd, args.trim()))
 }
 
 impl Registry {
@@ -62,20 +96,37 @@ impl Registry {
         self.plugins.iter().map(|p| p.as_ref())
     }
 
-    /// Routes `/cmd args` to the plugin that owns `cmd`, else gives every plugin the message.
-    pub fn dispatch(&self, event: &MessageEvent<'_>) -> Vec<Action> {
-        if let Some(rest) = event.text.strip_prefix('/') {
-            let (cmd, args) = rest.split_once(' ').unwrap_or((rest, ""));
-            return self
-                .plugins
-                .iter()
-                .filter(|p| p.commands().contains(&cmd))
-                .filter_map(|p| p.on_command(cmd, args, event).ok())
-                .collect();
-        }
+    pub fn handles(&self, command: &str) -> bool {
+        self.plugins.iter().any(|p| p.commands().contains(&command))
+    }
+
+    /// Runs the plugin that owns this command, if any.
+    /// Errors become [`Action::Notify`] so the user sees them.
+    pub fn run_command(&mut self, event: &MessageEvent<'_>) -> Option<Action> {
+        let (cmd, args) = parse_command(event.text)?;
+        let plugin = self.plugins.iter_mut().find(|p| p.commands().contains(&cmd))?;
+        Some(plugin.on_command(cmd, args, event).unwrap_or_else(|e| Action::Notify(e.to_string())))
+    }
+
+    /// Gives every plugin a non-command message (bot mode).
+    pub fn run_message_hooks(&mut self, event: &MessageEvent<'_>) -> Vec<Action> {
         self.plugins
-            .iter()
+            .iter_mut()
             .filter_map(|p| p.on_message(event).ok())
+            .filter(|a| *a != Action::Ignore)
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_commands() {
+        assert_eq!(parse_command("/roll 2d6"), Some(("roll", "2d6")));
+        assert_eq!(parse_command("/ping"), Some(("ping", "")));
+        assert_eq!(parse_command("hello"), None);
+        assert_eq!(parse_command("/"), None);
     }
 }

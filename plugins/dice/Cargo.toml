@@ -1,0 +1,10 @@
+[package]
+name = "tt-plugin-dice"
+description = "Dice and coin plugin: /roll 2d6, /flip."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tt-plugin.workspace = true
+rand_core.workspace = true
