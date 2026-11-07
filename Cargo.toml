@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tt-core",
+    "crates/tt-crypto",
+    "crates/tt-proto",
+    "crates/tt-plugin",
+    "crates/tt-relay",
+    "crates/tt-client",
+    "plugins/echo",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/noisyloop/talking-tube"
+
+[workspace.dependencies]
+# internal
+tt-core   = { path = "crates/tt-core" }
+tt-crypto = { path = "crates/tt-crypto" }
+tt-proto  = { path = "crates/tt-proto" }
+tt-plugin = { path = "crates/tt-plugin" }
+
+# common
+anyhow     = "1"
+thiserror  = "2"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio      = { version = "1", features = ["full"] }
+tracing    = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap       = { version = "4", features = ["derive"] }
+
+# crypto (same primitives as Shadow)
+x25519-dalek  = { version = "2", features = ["static_secrets", "zeroize"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+aes-gcm       = "0.10"
+hkdf          = "0.12"
+hmac          = "0.12"
+sha2          = "0.10"
+rand_core     = { version = "0.6", features = ["getrandom"] }
+zeroize       = { version = "1", features = ["derive"] }

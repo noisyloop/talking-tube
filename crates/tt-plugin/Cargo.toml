@@ -1,0 +1,10 @@
+[package]
+name = "tt-plugin"
+description = "Client-side plugin API."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tt-core.workspace = true
+thiserror.workspace = true
