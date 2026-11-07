@@ -1,0 +1,22 @@
+[package]
+name = "tt-client"
+description = "Talking Tube client (CLI now, TUI/GUI later)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tt"
+path = "src/main.rs"
+
+[dependencies]
+tt-core.workspace = true
+tt-crypto.workspace = true
+tt-proto.workspace = true
+tt-plugin.workspace = true
+tt-plugin-echo = { path = "../../plugins/echo" }
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

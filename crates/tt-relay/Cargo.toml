@@ -1,0 +1,15 @@
+[package]
+name = "tt-relay"
+description = "Self-hostable relay: routes and stores ciphertext, orders MLS commits."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tt-core.workspace = true
+tt-proto.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

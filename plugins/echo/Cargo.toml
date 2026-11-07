@@ -1,0 +1,9 @@
+[package]
+name = "tt-plugin-echo"
+description = "Example plugin: /echo <text>."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tt-plugin.workspace = true
