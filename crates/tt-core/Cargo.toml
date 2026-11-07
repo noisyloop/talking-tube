@@ -1,6 +1,6 @@
 [package]
 name = "tt-core"
-description = "Shared types: identities, communities, channels, messages."
+description = "Shared types: identities, communities, channels, messages, permissions."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,3 +8,6 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
+hex.workspace = true
+base64.workspace = true
+rand_core.workspace = true
