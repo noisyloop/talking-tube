@@ -36,6 +36,10 @@ cargo build --release
 > /roll 2d6
 ```
 
+Clients must dial the relay at the URL it reports (`ws://127.0.0.1:7070` by
+default; `localhost` is refused). Behind a proxy, start it with
+`tt-relay --public-url wss://your.host`.
+
 Type `/help` for every command. Use `tt run --bot` to make a device answer
 other people's plugin commands.
 
@@ -64,3 +68,4 @@ rotation, plugins, DMs, edits, reactions and offline delivery.
 * [Architecture](docs/ARCHITECTURE.md)
 * [Encryption, and whether we can use Signal's](docs/ENCRYPTION.md)
 * [Lab: hands-on exercises](lab.md)
+* [Security review](docs/SECURITY.md)

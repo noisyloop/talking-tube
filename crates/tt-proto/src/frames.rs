@@ -15,7 +15,7 @@ use tt_crypto::PreKeyBundle;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientFrame {
     /// Answer to [`RelayFrame::Challenge`]: an Ed25519 signature over
-    /// [`crate::auth_message`]. No passwords, no email.
+    /// [`crate::auth_message`] (relay URL + nonce). No passwords, no email.
     Auth {
         device: DeviceKey,
         #[serde(with = "b64")]
@@ -53,7 +53,10 @@ pub enum ClientFrame {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RelayFrame {
+    /// `relay` is the URL this relay says it's reachable at. Clients refuse
+    /// to sign a challenge naming a relay other than the one they dialed.
     Challenge {
+        relay: String,
         #[serde(with = "b64")]
         nonce: Vec<u8>,
     },

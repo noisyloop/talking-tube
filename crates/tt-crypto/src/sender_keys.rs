@@ -104,7 +104,8 @@ impl OwnSenderKey {
         };
         msg.signature = keys::sign(&self.signing_priv, &msg.signed_bytes(ad));
         self.chain_key = next_ck;
-        self.iteration += 1;
+        // A chain has 2^32 messages; after that the client must rotate.
+        self.iteration = self.iteration.saturating_add(1);
         msg
     }
 }
@@ -151,6 +152,8 @@ impl PeerSenderKey {
         if msg.iteration - self.iteration > MAX_SKIP {
             return Err(CryptoError::TooManySkipped);
         }
+        // The sender chooses both iterations; the last one can't be stepped past.
+        let next_iteration = msg.iteration.checked_add(1).ok_or(CryptoError::TooManySkipped)?;
 
         let mut ck = self.chain_key;
         let mut skipped = Vec::new();
@@ -163,7 +166,7 @@ impl PeerSenderKey {
         let pt = keys::aead_decrypt(&mk, &msg.ciphertext, ad)?;
 
         self.chain_key = next;
-        self.iteration = msg.iteration + 1;
+        self.iteration = next_iteration;
         self.skipped.extend(skipped);
         if self.skipped.len() > MAX_STORED_SKIPPED {
             let excess = self.skipped.len() - MAX_STORED_SKIPPED;
@@ -217,6 +220,16 @@ mod tests {
         mallory.signing_priv = keys::generate_signing();
         let forged = mallory.encrypt(b"", b"alice says hi");
         assert_eq!(bob_copy_of_alice.decrypt(b"", &forged), Err(CryptoError::BadSignature));
+    }
+
+    #[test]
+    fn hostile_iteration_does_not_overflow() {
+        // A malicious member distributes a chain that starts at the very end.
+        let mut own = OwnSenderKey::generate(0);
+        own.iteration = u32::MAX;
+        let mut peer = PeerSenderKey::from_distribution(&own.distribution());
+        let m = own.encrypt(b"", b"x");
+        assert_eq!(peer.decrypt(b"", &m), Err(CryptoError::TooManySkipped));
     }
 
     #[test]

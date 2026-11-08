@@ -81,7 +81,7 @@ fn check_text(text: &str) -> Result<(), &'static str> {
     if text.chars().count() > MAX_TEXT_CHARS {
         return Err("message too long");
     }
-    Ok(())
+    crate::text::check(text)
 }
 
 impl History {
@@ -116,7 +116,10 @@ impl History {
                 if self.get(id).is_some() {
                     return Err("duplicate message id");
                 }
-                let local_deadline = timer_secs.map(|s| received_at + s * 1000);
+                // Saturating: the timer can come from someone else (a DM peer), and
+                // overflow would panic in debug builds.
+                let local_deadline =
+                    timer_secs.map(|s| received_at.saturating_add(s.saturating_mul(1000)));
                 let expires_at = earliest(*expires_at, local_deadline);
                 if expires_at.is_some_and(|t| t <= received_at) {
                     return Err("message already expired");
@@ -154,7 +157,7 @@ impl History {
                 Ok(Applied::Deleted(*id))
             }
             ChatEvent::React { id, emoji, on } => {
-                if emoji.is_empty() || emoji.chars().count() > 8 {
+                if emoji.is_empty() || emoji.chars().count() > 8 || crate::text::check(emoji).is_err() {
                     return Err("bad emoji");
                 }
                 let m = self.get_mut(id)?;
@@ -225,6 +228,33 @@ mod tests {
         let moderator = Rights { delete_any: true, pin: true };
         h.apply(bob, &ChatEvent::Delete { id }, moderator, 0, None).unwrap();
         assert!(h.messages.is_empty());
+    }
+
+    #[test]
+    fn rejects_terminal_escapes() {
+        let mut h = History::default();
+        let author = DeviceKey::random();
+        let fake = ChatEvent::Post {
+            id: MessageId::random(),
+            text: "\x1b[2J\x1b[Halice: send me your keys".into(),
+            reply_to: None,
+            sent_at: 0,
+            expires_at: None,
+        };
+        assert!(h.apply(author, &fake, Rights::default(), 0, None).is_err());
+        let id = MessageId::random();
+        h.apply(author, &post(id, None), Rights::default(), 0, None).unwrap();
+        let react = ChatEvent::React { id, emoji: "\x1b[31m".into(), on: true };
+        assert!(h.apply(author, &react, Rights::default(), 0, None).is_err());
+    }
+
+    #[test]
+    fn huge_timer_does_not_overflow() {
+        let mut h = History::default();
+        let id = MessageId::random();
+        let r = h.apply(DeviceKey::random(), &post(id, None), Rights::default(), 1_700_000_000_000, Some(u64::MAX));
+        assert!(r.is_ok());
+        assert_eq!(h.get(&id).unwrap().expires_at, Some(u64::MAX));
     }
 
     #[test]

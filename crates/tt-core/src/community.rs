@@ -151,8 +151,8 @@ fn clean_name(name: &str) -> Result<String, OpError> {
     if name.chars().count() > MAX_NAME_CHARS {
         return Err(OpError::Invalid("name is too long"));
     }
-    if name.chars().any(char::is_control) {
-        return Err(OpError::Invalid("name has control characters"));
+    if crate::text::check(name).is_err() {
+        return Err(OpError::Invalid("name has control or text-direction characters"));
     }
     Ok(name.to_string())
 }
@@ -268,6 +268,9 @@ impl CommunityState {
                 require(Role::Moderator, "only moderators can set topics")?;
                 if topic.chars().count() > 256 {
                     return Err(OpError::Invalid("topic is too long"));
+                }
+                if crate::text::check(topic).is_err() {
+                    return Err(OpError::Invalid("topic has control or text-direction characters"));
                 }
                 self.channel_mut(id)?.topic = topic.trim().to_string();
             }
@@ -435,6 +438,17 @@ mod tests {
         s.apply(&owner, &Op::TransferOwnership { device: alice }, 0).unwrap();
         assert_eq!(s.owner, alice);
         assert_eq!(s.apply(&owner, &Op::Leave, 0), Ok(Effect::MemberRemoved(owner)));
+    }
+
+    #[test]
+    fn rejects_escapes_in_topics_and_names() {
+        let (mut s, owner, _, _) = setup();
+        let id = s.channels[0].id;
+        // OSC 52 would write to the reader's clipboard in some terminals.
+        let topic = Op::SetTopic { id, topic: "\x1b]52;c;aGk=\x07".into() };
+        assert!(s.apply(&owner, &topic, 0).is_err());
+        let nick = Op::SetNick { display_name: "\u{202E}nimda".into() };
+        assert!(s.apply(&owner, &nick, 0).is_err());
     }
 
     #[test]

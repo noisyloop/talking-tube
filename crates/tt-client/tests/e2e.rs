@@ -169,7 +169,7 @@ async fn communities_end_to_end() {
     bob.wait(move |e| texts(e, gen).iter().any(|t| t.starts_with("🎲 alice rolled 2d6"))).await;
 
     // DMs between people who share a community, with a disappearing timer.
-    bob.with(move |e| e.set_dm_timer(c, Some(60))).await;
+    bob.with(move |e| e.set_dm_timer(c, Some(60))).await.unwrap();
     bob.with(move |e| e.post_text(Place::Dm(c), "psst carol", None)).await.unwrap();
     carol.wait(has_text(Place::Dm(b), "psst carol")).await;
     carol

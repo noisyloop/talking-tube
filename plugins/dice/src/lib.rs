@@ -22,6 +22,10 @@ pub fn parse(spec: &str) -> Result<(u32, u32, i64), String> {
     if !(1..=100).contains(&n) || !(2..=1000).contains(&sides) {
         return Err("1-100 dice with 2-1000 sides".into());
     }
+    // Anyone can make a bot roll, so keep the arithmetic far from overflow.
+    if modifier.unsigned_abs() > 1_000_000 {
+        return Err("modifier must be within ±1000000".into());
+    }
     Ok((n, sides, modifier))
 }
 
@@ -76,6 +80,8 @@ mod tests {
         assert_eq!(parse(""), Ok((1, 6, 0)));
         assert!(parse("0d6").is_err());
         assert!(parse("banana").is_err());
+        assert!(parse("1d6+9223372036854775807").is_err());
+        assert!(parse("1d6-9223372036854775808").is_err());
     }
 
     #[test]

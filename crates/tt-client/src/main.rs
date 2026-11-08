@@ -44,7 +44,7 @@ fn store_path(home: Option<PathBuf>) -> anyhow::Result<PathBuf> {
         Some(h) => h,
         None => PathBuf::from(std::env::var("HOME").context("set --home or $HOME")?).join(".talking-tube"),
     };
-    std::fs::create_dir_all(&dir)?;
+    tt_client::store::create_private_dir(&dir)?;
     Ok(dir.join("store.json"))
 }
 

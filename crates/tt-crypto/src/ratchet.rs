@@ -132,7 +132,7 @@ impl RatchetState {
         let (next_ck, mk) = keys::kdf_ck(&ck);
         self.cks = Some(next_ck);
         let header = Header { dh: self.dhs_pub, pn: self.pn, n: self.ns };
-        self.ns += 1;
+        self.ns = self.ns.checked_add(1).ok_or(CryptoError::TooManySkipped)?;
         let ct = keys::aead_encrypt(&mk, plaintext, &full_ad(ad, &header));
         Ok((header, ct))
     }
@@ -157,7 +157,7 @@ impl RatchetState {
         let ck = next.ckr.ok_or(CryptoError::Decrypt)?;
         let (next_ck, mk) = keys::kdf_ck(&ck);
         next.ckr = Some(next_ck);
-        next.nr += 1;
+        next.nr = next.nr.checked_add(1).ok_or(CryptoError::TooManySkipped)?;
 
         let pt = keys::aead_decrypt(&mk, ct, &ad)?;
         *self = next;
@@ -167,7 +167,7 @@ impl RatchetState {
     /// Derives and stores message keys for messages we haven't seen yet.
     fn skip_until(&mut self, until: u32) -> Result<(), CryptoError> {
         let Some(mut ck) = self.ckr else { return Ok(()) };
-        if until > self.nr + MAX_SKIP {
+        if until > self.nr.saturating_add(MAX_SKIP) {
             return Err(CryptoError::TooManySkipped);
         }
         let dh = self.dhr.expect("a receiving chain implies a remote key");
