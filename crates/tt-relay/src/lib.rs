@@ -33,6 +33,9 @@ pub struct Config {
     pub max_frame: usize,
     /// Time allowed to answer the login challenge.
     pub auth_timeout: Duration,
+    /// The URL clients use to reach this relay (what they sign at login).
+    /// Defaults to `ws://<listen address>`; set it when behind a proxy.
+    pub public_url: Option<String>,
 }
 
 impl Default for Config {
@@ -41,12 +44,18 @@ impl Default for Config {
             retention: Duration::from_secs(7 * 86_400),
             max_frame: 256 * 1024,
             auth_timeout: Duration::from_secs(10),
+            public_url: None,
         }
     }
 }
 
 /// Accepts connections forever.
-pub async fn serve(listener: TcpListener, config: Config) -> anyhow::Result<()> {
+pub async fn serve(listener: TcpListener, mut config: Config) -> anyhow::Result<()> {
+    let url = match &config.public_url {
+        Some(u) => tt_proto::normalize_url(u),
+        None => format!("ws://{}", listener.local_addr()?),
+    };
+    config.public_url = Some(url);
     let relay = Arc::new(Relay::new(config.clone()));
 
     let purger = relay.clone();
@@ -78,14 +87,15 @@ async fn handle(relay: Arc<Relay>, config: Config, stream: TcpStream) -> anyhow:
     let ws = tokio_tungstenite::accept_async(stream).await?;
     let (mut sink, mut source) = ws.split();
 
-    // 1. Login: sign a fresh random nonce with your device key.
+    // 1. Login: sign our URL and a fresh random nonce with your device key.
+    let url = config.public_url.clone().expect("set in serve");
     let nonce: [u8; 32] = tt_crypto::keys::random_bytes();
-    sink.send(encode(&RelayFrame::Challenge { nonce: nonce.to_vec() })).await?;
+    sink.send(encode(&RelayFrame::Challenge { relay: url.clone(), nonce: nonce.to_vec() })).await?;
     let device = tokio::time::timeout(config.auth_timeout, async {
         while let Some(msg) = source.next().await {
             if let Message::Text(text) = msg? {
                 if let Ok(ClientFrame::Auth { device, signature }) = serde_json::from_str(&text) {
-                    tt_crypto::keys::verify(&device.0, &tt_proto::auth_message(&nonce), &signature)
+                    tt_crypto::keys::verify(&device.0, &tt_proto::auth_message(&url, &nonce), &signature)
                         .map_err(|_| anyhow::anyhow!("bad login signature"))?;
                     return Ok(device);
                 }

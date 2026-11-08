@@ -71,6 +71,14 @@ Trade-offs, compared with the pairwise ratchet:
 * MLS fixes both. The relay's per-community ordering is what MLS needs, so
   it can be added as another backend.
 
+## Logging in
+
+The relay sends `Challenge { relay, nonce }`. The client refuses unless
+`relay` matches the URL it dialed, then signs
+`"tt-relay-auth-v2" || len(url) || url || nonce` with its device key. Binding
+the URL stops a malicious relay from forwarding another relay's challenge
+and logging in there as you.
+
 ## What the relay sees
 
 It can't read anything, but it sees metadata:

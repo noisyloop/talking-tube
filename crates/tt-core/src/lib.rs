@@ -12,6 +12,7 @@ pub mod community;
 pub mod encoding;
 pub mod history;
 pub mod ids;
+pub mod text;
 pub mod time;
 
 pub use community::{Channel, CommunityEvent, CommunityState, Effect, Member, Op, OpError, Role};

@@ -264,7 +264,14 @@ dependencies, and register it in `Engine::new`. Make `/8ball <question>`
 reply with a random answer (look at how `plugins/dice` gets randomness).
 Then run a second identity with `tt run --bot` and ask it questions from the first.
 
-### Lab 18: Pick a real feature
+### Lab 18: Attack your own client
+
+Read `docs/SECURITY.md`. For findings 1, 2 and 5, undo the fix (for example,
+make `tt_core::text::check` always return `Ok(())`), run the named test, and
+watch it fail. Then pick an open finding (3, 4 or 6), write a failing test
+that shows the attack, and fix it.
+
+### Lab 19: Pick a real feature
 
 Each of these is a good multi-evening project. Write tests first.
 

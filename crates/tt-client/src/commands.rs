@@ -59,7 +59,7 @@ pub fn parse_duration(s: &str) -> Result<Option<u64>, String> {
         _ => (s.as_str(), 1),
     };
     let n: u64 = num.parse().map_err(|_| format!("can't read '{s}' as a duration"))?;
-    Ok(Some(n * mult))
+    n.checked_mul(mult).map(Some).ok_or_else(|| format!("'{s}' is too long"))
 }
 
 impl Engine {
@@ -297,7 +297,7 @@ impl Engine {
             "timer" => {
                 let secs = parse_duration(first()?)?;
                 match self.view_place()? {
-                    Place::Dm(peer) => self.set_dm_timer(peer, secs),
+                    Place::Dm(peer) => self.set_dm_timer(peer, secs)?,
                     Place::Channel(c, id) => self.send_op(c, Op::SetChannelTimer { id, secs })?,
                 }
             }
@@ -471,5 +471,6 @@ mod tests {
         assert_eq!(parse_duration("90"), Ok(Some(90)));
         assert_eq!(parse_duration("off"), Ok(None));
         assert!(parse_duration("soon").is_err());
+        assert!(parse_duration("99999999999999999w").is_err());
     }
 }

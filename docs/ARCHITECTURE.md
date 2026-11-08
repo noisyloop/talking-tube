@@ -38,7 +38,9 @@ no username or password. A user is an Ed25519 device key. Anyone can run a relay
 
 1. `tt init` makes an Ed25519 key (the identity) and an X25519 key (for X3DH),
    with a certificate signing the second with the first.
-2. On connect the relay sends a random nonce; the client signs it.
+2. On connect the relay sends its URL and a random nonce. The client checks the
+   URL is the one it dialed and signs both, so the signature is useless at any
+   other relay. Behind a proxy, start the relay with `--public-url wss://…`.
 3. The client uploads its signed prekey and a batch of one-time prekeys.
 
 ## Communities
@@ -96,13 +98,19 @@ To add one: make a crate implementing `Plugin`, register it in
 
 ## Known gaps
 
+See also [SECURITY.md](SECURITY.md) for the security review.
+
 * The inviter has to be online to let someone in.
+* A newcomer trusts the community state the inviter sends.
+* A member can stall the stream by withholding their sender key, and
+  members' states can diverge if keys reach only some of them.
 * The client store is plain JSON (owner-only permissions), not encrypted.
 * A member who's offline longer than relay retention (7 days by default)
   misses ops, and their copy of the state drifts. There's no resync yet.
 * One device per identity. No multi-device.
 * No TLS in the binaries; put the relay behind a TLS proxy for `wss://`.
-* The relay is in-memory and has no rate limiting.
+* The relay is in-memory and has no rate limiting (prekey draining, mailbox
+  and log flooding).
 * No voice.
 
 ## Roadmap ideas

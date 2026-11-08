@@ -31,7 +31,8 @@ use tt_crypto::{DmCiphertext, OwnSenderKey, PeerSenderKey, PreKeyBundle, SenderK
 use tt_plugin::{parse_command, Action, MessageEvent, Place, Registry};
 use tt_proto::inner::{community_ad, DmPayload};
 use tt_proto::invite::Invite;
-use tt_proto::{auth_message, ClientFrame, RelayFrame};
+use tt_core::text::sanitize;
+use tt_proto::{auth_message, normalize_url, ClientFrame, RelayFrame};
 
 use crate::store::{InviteRecord, LocalCommunity, PendingJoin, Store};
 
@@ -50,12 +51,19 @@ pub enum Notice {
     Chat { place: Place, line: String },
 }
 
+/// Sanitizes every line, keeping our own line breaks (help text, links).
+fn clean_lines(s: &str) -> String {
+    s.split('\n').map(sanitize).collect::<Vec<_>>().join("\n")
+}
+
+/// Printing a notice always strips control characters, as a second line of
+/// defense behind the input checks in `tt_core::text`.
 impl std::fmt::Display for Notice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Notice::Info(s) => f.write_str(s),
-            Notice::Error(s) => write!(f, "! {s}"),
-            Notice::Chat { line, .. } => f.write_str(line),
+            Notice::Info(s) => f.write_str(&clean_lines(s)),
+            Notice::Error(s) => write!(f, "! {}", clean_lines(s)),
+            Notice::Chat { line, .. } => f.write_str(&sanitize(line)),
         }
     }
 }
@@ -166,7 +174,7 @@ impl Engine {
     // ───────────────────────── connection ─────────────────────────
 
     pub fn on_connected(&mut self, url: &str) {
-        self.relay_url = Some(url.trim_end_matches('/').to_string());
+        self.relay_url = Some(normalize_url(url));
         self.online = false;
         // Anything buffered is re-sent by the relay when we resubscribe.
         self.stream.clear();
@@ -180,8 +188,16 @@ impl Engine {
     pub fn handle_frame(&mut self, frame: RelayFrame) {
         self.dirty = true;
         match frame {
-            RelayFrame::Challenge { nonce } => {
-                let signature = self.store.identity.sign(&auth_message(&nonce));
+            RelayFrame::Challenge { relay, nonce } => {
+                // Only sign a challenge for the relay we actually dialed.
+                let dialed = self.relay_url.clone().unwrap_or_default();
+                if normalize_url(&relay) != dialed {
+                    return self.error(format!(
+                        "refusing to log in: we dialed {dialed} but the relay says it is {}",
+                        sanitize(&relay)
+                    ));
+                }
+                let signature = self.store.identity.sign(&auth_message(&dialed, &nonce));
                 self.out.push(ClientFrame::Auth { device: self.me(), signature });
             }
             RelayFrame::AuthOk { opks_remaining } => {
@@ -218,7 +234,7 @@ impl Engine {
                 self.drain_stream(community);
             }
             RelayFrame::Synced { .. } => {}
-            RelayFrame::Error { message } => self.error(format!("relay: {message}")),
+            RelayFrame::Error { message } => self.error(format!("relay: {}", sanitize(&message))),
         }
     }
 
@@ -375,6 +391,10 @@ impl Engine {
                 }
             }
             DmPayload::SetTimer { secs } => {
+                // The peer picks this number; keep it in the same range as channel timers.
+                if let Err(e) = check_timer(secs) {
+                    return self.error(format!("ignored a DM timer change: {e}"));
+                }
                 self.store.dms.entry(from).or_default().timer_secs = secs;
                 let who = self.name_of(None, &from);
                 self.info(format!("{who} set disappearing messages to {}", describe_timer(secs)));
@@ -382,7 +402,7 @@ impl Engine {
             DmPayload::JoinRequest { community, token, display_name } => {
                 if let Err(reason) = self.on_join_request(from, community, &token, &display_name) {
                     self.send_dm(from, DmPayload::JoinRejected { community, reason: reason.clone() });
-                    self.info(format!("turned down a join request: {reason}"));
+                    self.info(format!("turned down a join request: {}", sanitize(&reason)));
                 }
             }
             DmPayload::Welcome { state, cursor } => self.on_welcome(from, state, cursor),
@@ -390,7 +410,7 @@ impl Engine {
                 if self.store.pending_joins.get(&community).is_some_and(|p| p.inviter == from) {
                     self.store.pending_joins.remove(&community);
                     self.orphan_keys.remove(&community);
-                    self.error(format!("join refused: {reason}"));
+                    self.error(format!("join refused: {}", sanitize(&reason)));
                 }
             }
             DmPayload::SenderKey { community, distribution } => {
@@ -399,10 +419,12 @@ impl Engine {
         }
     }
 
-    pub fn set_dm_timer(&mut self, peer: DeviceKey, secs: Option<u64>) {
+    pub fn set_dm_timer(&mut self, peer: DeviceKey, secs: Option<u64>) -> Result<(), String> {
+        check_timer(secs)?;
         self.store.dms.entry(peer).or_default().timer_secs = secs;
         self.send_dm(peer, DmPayload::SetTimer { secs });
         self.info(format!("disappearing messages: {}", describe_timer(secs)));
+        Ok(())
     }
 
     // ───────────────────────── joining ─────────────────────────
@@ -458,17 +480,23 @@ impl Engine {
         let token = hex::encode(tt_crypto::keys::random_bytes::<16>());
         c.invites.insert(
             token.clone(),
-            InviteRecord { expires_at: now_ms() + hours * 3_600_000, uses_left: uses },
+            InviteRecord {
+                expires_at: now_ms().saturating_add(hours.min(24 * 365).saturating_mul(3_600_000)),
+                uses_left: uses,
+            },
         );
         self.dirty = true;
         Ok(Invite { relay, community, name_hint: c.state.name.clone(), inviter: me, token }.encode())
     }
 
     pub fn join(&mut self, invite: &str) -> Result<(), String> {
-        let invite = Invite::decode(invite)?;
+        let mut invite = Invite::decode(invite)?;
+        // Anyone can write an invite; its name is shown before we trust anything.
+        invite.name_hint = sanitize(&invite.name_hint);
         let relay = self.relay_url.as_deref().ok_or("connect to a relay first")?;
-        if invite.relay.trim_end_matches('/') != relay {
-            return Err(format!("this invite is for {}; run `tt run --relay {}`", invite.relay, invite.relay));
+        if normalize_url(&invite.relay) != relay {
+            let r = sanitize(&invite.relay);
+            return Err(format!("this invite is for {r}; run `tt run --relay {r}`"));
         }
         if self.store.communities.contains_key(&invite.community) {
             return Err("you're already in that community".into());
@@ -906,12 +934,31 @@ impl Engine {
         }
     }
 
+    /// Display names aren't unique, so anyone can join as "alice". When a
+    /// name is shared in this community, or the author isn't verified and
+    /// shares a name with someone we know, add the start of their key.
+    fn display_author(&self, place: Place, author: &DeviceKey) -> String {
+        let name = self.name_of(Some(place), author);
+        let lower = name.to_lowercase();
+        let clash = match place {
+            Place::Channel(c, _) => self.store.communities.get(&c).is_some_and(|c| {
+                c.state.members.iter().any(|(d, m)| d != author && m.display_name.to_lowercase() == lower)
+            }),
+            Place::Dm(_) => false,
+        } || (*author != self.me() && lower == self.store.display_name.to_lowercase());
+        if clash {
+            format!("{name}#{}", &author.to_string()[..4])
+        } else {
+            name
+        }
+    }
+
     pub fn format_message(&self, place: Place, m: &StoredMessage) -> String {
         let mut line = format!(
             "[{}] {} {}: ",
             &m.id.to_string()[..6],
             hhmm(m.sent_at),
-            self.name_of(Some(place), &m.author)
+            self.display_author(place, &m.author)
         );
         if let Some(r) = m.reply_to {
             line.push_str(&format!("↪{} ", &r.to_string()[..6]));
@@ -931,6 +978,17 @@ impl Engine {
             line.push_str(&format!(" ⏳{}", describe_secs(left)));
         }
         line
+    }
+}
+
+/// Disappearing timers must be off or between 5 seconds and 1 year.
+pub fn check_timer(secs: Option<u64>) -> Result<(), String> {
+    use tt_core::community::{MAX_TIMER_SECS, MIN_TIMER_SECS};
+    match secs {
+        Some(s) if !(MIN_TIMER_SECS..=MAX_TIMER_SECS).contains(&s) => {
+            Err("timer must be between 5s and 1 year".into())
+        }
+        _ => Ok(()),
     }
 }
 
@@ -972,5 +1030,64 @@ fn describe_op(state: &CommunityState, author: &DeviceKey, op: &Op) -> String {
         Op::Leave => format!("{who} left"),
         Op::SetNick { display_name } => format!("{who} is now called {display_name}"),
         Op::TransferOwnership { device } => format!("{who} gave ownership to {}", name(device)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn engine(name: &str) -> Engine {
+        Engine::new(Store::new(name), None)
+    }
+
+    #[test]
+    fn refuses_challenges_for_another_relay() {
+        let mut e = engine("alice");
+        e.on_connected("ws://good.example:7070/");
+        // A malicious relay forwards a real relay's challenge.
+        e.handle_frame(RelayFrame::Challenge { relay: "ws://victim.example:7070".into(), nonce: vec![1; 32] });
+        assert!(e.take_outgoing().is_empty());
+        assert!(matches!(e.take_notices().as_slice(), [Notice::Error(_)]));
+        // The real thing (case and trailing slash don't matter).
+        e.handle_frame(RelayFrame::Challenge { relay: "WS://good.example:7070".into(), nonce: vec![1; 32] });
+        let out = e.take_outgoing();
+        let [ClientFrame::Auth { device, signature }] = out.as_slice() else { panic!("expected auth") };
+        let msg = auth_message("ws://good.example:7070", &[1; 32]);
+        tt_crypto::keys::verify(&device.0, &msg, signature).unwrap();
+    }
+
+    #[test]
+    fn ignores_out_of_range_timers_from_peers() {
+        let mut e = engine("alice");
+        let peer = DeviceKey::random();
+        e.on_dm_payload(peer, DmPayload::SetTimer { secs: Some(u64::MAX) }, 0);
+        e.on_dm_payload(peer, DmPayload::SetTimer { secs: Some(0) }, 0);
+        assert_eq!(e.store.dms.get(&peer).and_then(|c| c.timer_secs), None);
+        e.on_dm_payload(peer, DmPayload::SetTimer { secs: Some(60) }, 0);
+        assert_eq!(e.store.dms[&peer].timer_secs, Some(60));
+        assert!(e.set_dm_timer(peer, Some(1)).is_err());
+    }
+
+    #[test]
+    fn printing_strips_control_characters() {
+        let n = Notice::Error("relay: \x1b[2Jgotcha\u{202E}".into());
+        assert!(!n.to_string().chars().any(tt_core::text::is_unsafe));
+        let help = Notice::Info("line one\nline two".into());
+        assert_eq!(help.to_string(), "line one\nline two");
+    }
+
+    #[test]
+    fn shared_names_get_a_key_suffix() {
+        let mut e = engine("alice");
+        let id = e.create_community("Club").unwrap();
+        let general = e.store.communities[&id].state.channels[0].id;
+        let me = e.me();
+        let impostor = DeviceKey::random();
+        let c = e.store.communities.get_mut(&id).unwrap();
+        c.state.apply(&me, &Op::AddMember { device: impostor, display_name: "Alice".into() }, 0).unwrap();
+        let place = Place::Channel(id, general);
+        assert!(e.display_author(place, &impostor).starts_with("Alice#"));
+        assert!(e.display_author(place, &me).starts_with("alice#"));
     }
 }

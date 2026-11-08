@@ -12,6 +12,18 @@ use serde::{Deserialize, Serialize};
 use tt_core::{ChannelId, CommunityId, CommunityState, DeviceKey, History};
 use tt_crypto::{DeviceIdentity, OneTimePreKey, OwnSenderKey, PeerSenderKey, Session, SignedPreKey};
 
+/// Creates `dir` (and parents) readable only by the owner (0700 on Unix).
+pub fn create_private_dir(dir: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(dir)
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Store {
     pub identity: DeviceIdentity,
@@ -96,15 +108,47 @@ impl Store {
     }
 
     /// Writes to a temp file and renames, so a crash can't leave half a file.
+    ///
+    /// The temp file is *created* owner-only (0600). Setting permissions after
+    /// writing would leave a moment where other users could read the keys.
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        use std::io::Write;
         let tmp = path.with_extension("tmp");
-        std::fs::write(&tmp, serde_json::to_vec(self)?)?;
+        // A leftover temp file might have looser permissions; start fresh.
+        let _ = std::fs::remove_file(&tmp);
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
         }
+        let mut file = options.open(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+        file.write_all(&serde_json::to_vec(self)?)?;
+        file.sync_all()?;
         std::fs::rename(&tmp, path)?;
         Ok(())
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn store_and_folder_are_owner_only() {
+        let dir = std::env::temp_dir().join(format!("tt-store-test-{}", tt_core::MessageId::random()));
+        create_private_dir(&dir).unwrap();
+        let path = dir.join("store.json");
+        // A stale world-readable temp file must not keep its permissions.
+        std::fs::write(path.with_extension("tmp"), b"old").unwrap();
+        std::fs::set_permissions(path.with_extension("tmp"), std::fs::Permissions::from_mode(0o644)).unwrap();
+        Store::new("t").save(&path).unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(mode(&dir), 0o700);
+        assert!(Store::load(&path).is_ok());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
