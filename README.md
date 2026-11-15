@@ -3,6 +3,12 @@ Talking tube is a replacement for Discord in Rust, with more encryption.
 
 **Research project. Not audited. Don't protect anything real with it.**
 
+![Concept mockup of a Talking Tube desktop client: a community with a disappearing channel, a dice-plugin roll, key rotation after a kick, roles and safety numbers](docs/screenshot.png)
+
+*Concept mockup of a possible graphical client. Today's client is the `tt`
+terminal app; attachments and the GUI aren't built yet. Mockup source:
+[`docs/mockup/ui.html`](docs/mockup/ui.html).*
+
 * Communities with channels, roles, invites, kicks and bans, like Discord, but
   no email, phone or login. Your identity is a key made on your device.
 * DMs use the Signal protocol (X3DH + Double Ratchet), ported from
