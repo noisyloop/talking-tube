@@ -1,0 +1,202 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Talking Tube UI</title>
+<style>
+:root{
+  --bg:#0f1216; --rail:#0b0d10; --side:#151a20; --chat:#12161b; --line:#232a33;
+  --text:#d9dee5; --dim:#8a94a1; --faint:#5d6672; --accent:#e3a23b; --accent-d:#3a2c14;
+  --ok:#4fb38a; --warn:#d9734e; --blue:#6ea8fe; --plug:#1a2330;
+}
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important}
+body{width:1440px;height:900px;background:var(--bg);color:var(--text);font:14px/1.45 Inter,"Noto Color Emoji",sans-serif;display:flex;flex-direction:column;overflow:hidden}
+.mono{font-family:"JetBrains Mono","Noto Color Emoji",monospace}
+.app{flex:1;display:flex;min-height:0}
+/* rail */
+.rail{width:68px;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:10px}
+.tile{width:44px;height:44px;display:grid;place-items:center;font-weight:700;font-size:15px;background:#1c222a;color:var(--dim);position:relative}
+.tile.on{background:var(--accent);color:#16110a}
+.tile.on::before{content:"";position:absolute;left:-12px;top:6px;width:4px;height:32px;background:var(--accent)}
+.tile .dot{position:absolute;right:-3px;bottom:-3px;width:12px;height:12px;background:var(--warn);border:2px solid var(--rail)}
+.rail .sep{width:32px;height:1px;background:var(--line)}
+.tile.add{background:transparent;border:1px dashed #36404c;color:var(--faint);font-weight:400;font-size:22px}
+/* sidebar */
+.side{width:250px;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+.side-h{padding:14px 16px;border-bottom:1px solid var(--line)}
+.side-h b{font-size:16px}
+.badge{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:11.5px;color:var(--ok)}
+.sq{width:7px;height:7px;background:currentColor;display:inline-block}
+.sec{padding:16px 16px 6px;font-size:11px;letter-spacing:.08em;color:var(--faint);font-weight:600}
+.ch{display:flex;align-items:center;gap:8px;padding:6px 16px;color:var(--dim)}
+.ch .h{color:var(--faint);width:12px}
+.ch.on{background:#1f262f;color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+.ch .r{margin-left:auto;font-size:11px;color:var(--accent)}
+.ch .n{margin-left:auto;font-size:11px;background:var(--warn);color:#fff;padding:0 6px;font-weight:600}
+.ck{color:var(--ok);font-size:12px}
+.me{margin-top:auto;border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:10px;align-items:center;background:#12161b}
+.av{width:34px;height:34px;display:grid;place-items:center;font-weight:700;font-size:14px;flex:none;color:#0f1216}
+.me .k{font-size:11px;color:var(--faint)}
+/* chat */
+.chat{flex:1;background:var(--chat);display:flex;flex-direction:column;min-width:0}
+.top{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 20px}
+.top .t{font-weight:700;font-size:16px;white-space:nowrap;flex:none}
+.chip{white-space:nowrap;flex:none;font-size:12px;padding:3px 8px;border:1px solid var(--line);color:var(--dim);display:inline-flex;gap:6px;align-items:center}
+.chip.amber{border-color:#5a4520;color:var(--accent);background:var(--accent-d)}
+.chip.green{border-color:#24503f;color:var(--ok);background:#12241d}
+.top .topic{color:var(--dim);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .right{margin-left:auto;display:flex;gap:8px}
+.pin{margin:12px 20px 0;padding:8px 12px;background:#171c22;border:1px solid var(--line);border-left:3px solid var(--accent);font-size:13px;color:var(--dim)}
+.pin b{color:var(--text);font-weight:600}
+.msgs{flex:1;padding:8px 0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.m{display:flex;gap:14px;padding:8px 20px}
+.m:hover{background:#151a20}
+.m .body{min-width:0;flex:1}
+.who{display:flex;gap:8px;align-items:baseline}
+.who b{font-weight:600}
+.who .time,.who .id{font-size:11.5px;color:var(--faint)}
+.who .exp{font-size:11.5px;color:var(--accent);margin-left:auto}
+.txt{margin-top:2px}
+.edited{font-size:11px;color:var(--faint)}
+.reply{font-size:12.5px;color:var(--dim);display:flex;gap:6px;align-items:center;margin-bottom:2px}
+.reply::before{content:"↪";color:var(--faint)}
+.rx{display:flex;gap:6px;margin-top:6px}
+.rx span{font-size:12.5px;padding:1px 8px;background:#1b2128;border:1px solid var(--line)}
+.rx span.mine{border-color:#5a4520;background:var(--accent-d)}
+.sys{padding:6px 20px 6px 68px;font-size:12.5px;color:var(--dim);display:flex;gap:8px;align-items:center}
+.sys .ic{color:var(--ok)}
+.sys.rot .ic{color:var(--accent)}
+.day{display:flex;align-items:center;gap:12px;padding:10px 20px;font-size:11px;letter-spacing:.08em;color:var(--faint);font-weight:600}
+.day::before,.day::after{content:"";flex:1;height:1px;background:var(--line)}
+.file{margin-top:6px;display:flex;gap:12px;align-items:center;border:1px solid var(--line);background:#171c22;padding:10px 12px;max-width:440px}
+.file .fi{width:36px;height:42px;background:#232a33;display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--dim)}
+.file .fs{font-size:11.5px;color:var(--faint)}
+.plugin{margin-top:6px;border:1px solid #263345;background:var(--plug);padding:10px 12px;max-width:440px}
+.plugin .tag{font-size:10.5px;letter-spacing:.08em;color:var(--blue);font-weight:600}
+.plugin .res{margin-top:4px;font-size:14px}
+.dice{display:inline-grid;place-items:center;width:26px;height:26px;background:#0f1216;border:1px solid #33465e;font-weight:700;margin-right:4px}
+.cmd{color:var(--blue)}
+.composer{margin:4px 20px 16px;border:1px solid #2b333d;background:#171c22;display:flex;align-items:center;gap:10px;padding:12px 14px}
+.composer .ph{color:var(--faint);flex:1}
+.kbd{font-size:11px;color:var(--faint);border:1px solid var(--line);padding:1px 6px}
+/* members */
+.mem{width:250px;background:var(--side);border-left:1px solid var(--line);padding-bottom:12px;display:flex;flex-direction:column}
+.mrow{display:flex;gap:10px;align-items:center;padding:6px 16px}
+.mrow .av{width:30px;height:30px;font-size:12.5px}
+.mrow .nm{font-weight:500}
+.mrow .key{font-size:11px;color:var(--faint)}
+.mrow.warn .nm{color:var(--warn)}
+.st{width:8px;height:8px;margin-left:auto;flex:none}
+.safety{margin:auto 16px 0;border:1px solid var(--line);background:#12161b;padding:12px}
+.safety .l{font-size:11px;letter-spacing:.08em;color:var(--faint);font-weight:600}
+.safety .num{margin-top:6px;font-size:12.5px;line-height:1.7;color:var(--text)}
+.safety .v{margin-top:8px;font-size:12px;color:var(--ok)}
+/* status */
+.status{height:28px;background:#0b0d10;border-top:1px solid var(--line);display:flex;align-items:center;gap:18px;padding:0 14px;font-size:11.5px;color:var(--dim)}
+.status .ok{color:var(--ok)}
+.status .sp{margin-left:auto}
+</style></head><body>
+<div class="app">
+  <nav class="rail">
+    <div class="tile on">NO</div>
+    <div class="tile">LB<span class="dot"></span></div>
+    <div class="tile">RS</div>
+    <div class="sep"></div>
+    <div class="tile add">+</div>
+    <div style="margin-top:auto" class="tile">@</div>
+  </nav>
+
+  <aside class="side">
+    <div class="side-h"><b>Night Owls</b><br>
+      <span class="badge"><span class="sq"></span>End-to-end encrypted · 5 members</span></div>
+    <div class="sec">TEXT CHANNELS</div>
+    <div class="ch"><span class="h">#</span>general</div>
+    <div class="ch on"><span class="h">#</span>secret-plans<span class="r">⏳ 1h</span></div>
+    <div class="ch"><span class="h">#</span>rust-help<span class="n">3</span></div>
+    <div class="ch"><span class="h">#</span>crypto-lab</div>
+    <div class="ch"><span class="h">#</span>off-topic<span class="r">⏳ 1d</span></div>
+    <div class="sec">DIRECT MESSAGES</div>
+    <div class="ch"><span class="h">@</span>bob <span class="ck">✓</span><span class="r">⏳ 5m</span></div>
+    <div class="ch"><span class="h">@</span>carol</div>
+    <div class="me">
+      <div class="av" style="background:#e3a23b">A</div>
+      <div><b>alice</b> <span class="ck">owner</span><div class="k mono">58ac4420a82f…0a6d</div></div>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <div class="top">
+      <span class="t"># secret-plans</span>
+      <span class="chip amber">⏳ messages disappear after 1h</span>
+      <span class="topic">Topic: planning the meetup, nothing leaves this channel</span>
+      <div class="right"><span class="chip green"><span class="sq"></span>sender keys · gen 2</span></div>
+    </div>
+    <div class="pin">📌 <b>bob:</b> Meetup is Saturday 19:00, same place as last time.</div>
+
+    <div class="msgs">
+      <div class="day">TODAY</div>
+      <div class="sys"><span class="ic">■</span>alice set disappearing messages in #secret-plans to 1h</div>
+      <div class="m"><div class="av" style="background:#4fb38a">C</div><div class="body">
+        <div class="who"><b>carol</b><span class="time">18:21</span><span class="id mono">[e10b52]</span><span class="exp">⏳ 11m</span></div>
+        <div class="txt">Thanks for turning the timer on. Logistics only in here, no permanent record.</div>
+      </div></div>
+      <div class="m"><div class="av" style="background:#6ea8fe">B</div><div class="body">
+        <div class="who"><b>bob</b><span class="ck">✓</span><span class="time">18:24</span><span class="id mono">[9c4d11]</span><span class="exp">⏳ 14m</span></div>
+        <div class="txt">Here's the rough plan. Edits welcome.</div>
+        <div class="file"><div class="fi">PDF</div><div><div>meetup-plan.pdf</div><div class="fs">48 KB · encrypted attachment</div></div></div>
+      </div></div>
+
+      <div class="m"><div class="av" style="background:#6ea8fe">B</div><div class="body">
+        <div class="who"><b>bob</b><span class="ck">✓</span><span class="time">19:02</span><span class="id mono">[3fa91c]</span><span class="exp">⏳ 52m</span></div>
+        <div class="txt">Meetup is Saturday 19:00, same place as last time.</div>
+        <div class="rx"><span class="mine">👍 3</span><span>🦉 1</span></div>
+      </div></div>
+
+      <div class="m"><div class="av" style="background:#4fb38a">C</div><div class="body">
+        <div class="reply"><b style="color:#6ea8fe">bob</b> Meetup is Saturday 19:00, same place…</div>
+        <div class="who"><b>carol</b><span class="time">19:04</span><span class="id mono">[a8d204]</span><span class="exp">⏳ 54m</span></div>
+        <div class="txt">Works for me. I'll bring the dice for the game after. <span class="edited">(edited)</span></div>
+      </div></div>
+
+      <div class="m"><div class="av" style="background:#e3a23b">A</div><div class="body">
+        <div class="who"><b>alice</b><span class="time">19:05</span><span class="id mono">[c01e7f]</span><span class="exp">⏳ 55m</span></div>
+        <div class="txt mono cmd">/roll 2d6</div>
+        <div class="plugin"><div class="tag">PLUGIN · DICE · RAN ON ALICE'S DEVICE</div>
+          <div class="res">🎲 alice rolled 2d6: <span class="dice">4</span><span class="dice">6</span> = <b>10</b></div></div>
+      </div></div>
+
+      <div class="sys rot"><span class="ic">■</span>alice kicked mallory · everyone rotated to sender key generation 2</div>
+
+      <div class="m"><div class="av" style="background:#c08bd6">D</div><div class="body">
+        <div class="who"><b>dave</b><span class="time">19:09</span><span class="id mono">[77b3e0]</span><span class="exp">⏳ 59m</span></div>
+        <div class="txt">Good call. Can someone DM me the address? Not putting it here, even with the timer.</div>
+        <div class="rx"><span>✅ 2</span></div>
+      </div></div>
+    </div>
+
+    <div class="composer">
+      <span class="ph">Message #secret-plans: encrypted with your sender key, gone in 1h</span>
+      <span class="kbd mono">/help</span><span class="chip amber">⏳ 1h</span>
+    </div>
+  </main>
+
+  <aside class="mem">
+    <div class="sec">OWNER</div>
+    <div class="mrow"><div class="av" style="background:#e3a23b">A</div><div><span class="nm">alice</span><div class="key mono">58ac4420 · you</div></div><span class="st" style="background:var(--ok)"></span></div>
+    <div class="sec">ADMIN</div>
+    <div class="mrow"><div class="av" style="background:#6ea8fe">B</div><div><span class="nm">bob</span> <span class="ck">✓</span><div class="key mono">b30104e0</div></div><span class="st" style="background:var(--ok)"></span></div>
+    <div class="sec">MODERATOR</div>
+    <div class="mrow"><div class="av" style="background:#4fb38a">C</div><div><span class="nm">carol</span><div class="key mono">e2622ee3</div></div><span class="st" style="background:var(--ok)"></span></div>
+    <div class="sec">MEMBER</div>
+    <div class="mrow"><div class="av" style="background:#c08bd6">D</div><div><span class="nm">dave</span> <span class="ck">✓</span><div class="key mono">4d1e9a07</div></div><span class="st" style="background:var(--faint)"></span></div>
+    <div class="mrow warn"><div class="av" style="background:#d9734e">A</div><div><span class="nm">alice#9f3c</span><div class="key mono">name clash · unverified</div></div><span class="st" style="background:var(--faint)"></span></div>
+    <div class="safety">
+      <div class="l">SAFETY NUMBER · BOB</div>
+      <div class="num mono">01574 92187 61384 69249<br>96067 68168 66674 98900<br>24510 72709 40997 26784</div>
+      <div class="v">✓ verified in person</div>
+    </div>
+  </aside>
+</div>
+<div class="status mono">
+  <span class="ok">■ connected</span><span>ws://127.0.0.1:7070</span>
+  <span>relay sees ciphertext only</span><span>DMs: X3DH + Double Ratchet</span><span>channels: sender keys</span>
+  <span class="sp">no email · no phone · key 58ac4420</span>
+</div>
+</body></html>
